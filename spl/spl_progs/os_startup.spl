@@ -1,0 +1,75 @@
+
+load(7,1);//exHandler
+load(8,2);
+
+load(23,17);//int7
+load(24,18);
+
+load(11,5); //int1
+load(12,6);
+
+load(9,3);  //timer interrupt
+load(10,4); 
+
+[READY_LIST+0]=0;  //pid of init process is set to 0
+load(25,21); //page1 of init
+load(26,22);
+load(27,23);
+
+PTBR=1024;
+PTLR=4;
+[PTBR+0]=25;
+[PTBR+1]="01";
+[PTBR+2]=26;
+[PTBR+3]="01";
+[PTBR+4]=27;
+[PTBR+5]="01";
+[PTBR+6]=28;
+[PTBR+7]="01";
+
+[READY_LIST + 1] = 2; // Sets the entry for STATE as Running 
+
+//breakpoint;
+
+SP=3*512 ; //3*512
+[28 * 512] = 0; // Set up the IP value for INIT in the stack 
+
+breakpoint;
+
+
+[READY_LIST+32*1]=1; //pid of 2nd process is set to 1 (1536+pid*32)
+load(29,27); //loads codeblock from block 27 to page 29
+
+alias PTBR_Process1 S0;
+PTBR_Process1= 1024 + 1*8;
+
+[PTBR_Process1+0]=29;
+[PTBR_Process1+1]="01";
+
+//what if I dont give -1 to other code blocks and give next page for stack??
+
+[PTBR_Process1+2]= -1;
+[PTBR_Process1+3]="00";
+[PTBR_Process1+4]= -1;
+[PTBR_Process1+5]="00";
+[PTBR_Process1+6]=30;
+[PTBR_Process1+7]="01";
+
+breakpoint;
+
+[READY_LIST+ 32*1+1]=1; //state is ready
+[READY_LIST +32*1 +5]=PTBR_Process1 ;//ptbr 
+[READY_LIST +32*1 +6]=4; //buggg 2 ? 4?? change if err! PTLR ask sree/nava
+[READY_LIST +32*1 +2]=3*512; //bp
+[READY_LIST +32*1 +3]=3*512; //sp
+[READY_LIST +32*1 +4]= 0; //ip-->starting logical addr
+
+
+
+
+
+ireturn; //IRET switches to user and sets ip as sp and sp--
+
+
+
+
