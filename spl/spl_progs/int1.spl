@@ -1,0 +1,101 @@
+
+
+alias phySP S0;
+phySP=([PTBR + 2*(SP/512)]*512) + SP%512 ;
+
+alias sysCallNo S1;
+sysCallNo = [phySP - 1];
+
+//args???
+alias counter S2;
+alias flag S3;
+
+
+if (sysCallNo==1) then // Create
+	alias arg1 S5;
+	arg1=[phySP - 3];
+	counter=FAT;
+	flag=0;
+	
+	while (counter < FAT+512) do
+		if ([counter]==arg1) then
+			[phySP - 2]=0;    //return 0 with success
+			ireturn;	
+		endif;
+		counter=counter+8;
+	endwhile;		
+		
+	
+
+	counter=24; //24 to 447 blocks can be used by user. search in df
+	alias freeBl S4;
+	freeBl=-1;
+	
+breakpoint;
+
+	while (counter < 448) do
+		if ([6*512 + counter]==0) then
+               			//6*512 is starting addr of df in memory. if a free block is found
+			freeBl=counter;  break;
+		endif;
+		counter=counter+1;
+	endwhile;
+		
+	if (freeBl==-1) then
+		//return from call with value -1
+		[phySP - 2]=-1;
+		ireturn;
+	endif;	
+
+	//search for free entry in FAT. word 2 of an entry
+	
+	counter=FAT;
+	flag=0;
+	
+	while (counter < FAT+512) do
+		if ([counter + 2] ==-1) then
+		 	flag=1; break;
+		endif;
+		counter=counter+8;
+	endwhile;
+	
+	if (flag==0) then 
+		//no free fat entry for basic block
+		[phySP - 2]=-1;
+		ireturn;
+	endif;
+	
+	//free entry is found
+	//set fields of fat table
+	
+	[counter]=arg1; //filename is arg
+	[counter+1]=0; //filesize initialised to 0
+	[counter+2]= freeBl ; //basic block num
+	
+	[DISK_LIST]=1;
+	[DISK_LIST+1]=1;
+	[DISK_LIST+2]=1;
+	load(1,freeBl); // load basicblock to scratchpad
+
+	alias i S6;
+ 	i=512;
+	while (i< (512+256)) do
+		[i]=-1;
+		i=i+1;
+	endwhile;
+
+	store(1,freeBl); //store basicblock to disk from scratchpad	
+
+	[6*512 + freeBl]=1; //entry for basicblock in df set to 1
+	
+	store(5,19); //store fat
+	store(6,20); //store df
+
+	[phySP-2]=0;
+	
+	ireturn;
+endif;
+
+	
+	
+
