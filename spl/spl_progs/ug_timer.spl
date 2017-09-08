@@ -1,6 +1,7 @@
 //...................... Timer Interrupt..........
 
 //......................Setting values of running process to PCB
+breakpoint;
 
 print ("Timer ug");
 alias currentPID S0;

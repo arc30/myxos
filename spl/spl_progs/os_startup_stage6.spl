@@ -11,7 +11,7 @@ load(12,6);
 load(9,3);  //timer interrupt
 load(10,4); 
 
-[READY_LIST+0]=0;
+[READY_LIST+0]=0; //pid of init
 load(25,21); //page1 of init
 load(26,22);
 load(27,23);
@@ -34,12 +34,15 @@ breakpoint;
 SP=3*512 ; //3*512
 [28 * 512] = 0; // Set up the IP value for INIT in the stack 
 
+
+
 breakpoint;
 
 ///////////////////////////////////2nd process
 
 [READY_LIST+32]=1;
-load(29,27);
+
+load(29,26); //exec file is in block 26
 
 alias PTBR_Process1 S0;
 
@@ -66,6 +69,8 @@ PTBR_Process1= 1024 + 1*8;
 [READY_LIST + 37] = PTBR_Process1; // PTBR
 [READY_LIST + 38] = 4; // PTLR 
 
+
+//[30 * 512]=0 ; // Set up the IP value for exec in the stack
 
 ireturn;
 

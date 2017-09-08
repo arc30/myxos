@@ -1,7 +1,7 @@
 integer main()
 {
 integer i;
-i=1;
+i=2;
 while (i<=20) do
         if (i%2==0) then
                 print(i);
