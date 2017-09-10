@@ -9,10 +9,10 @@ sysCallNo = [phySP - 1];
 //args???
 alias counter S2;
 alias flag S3;
-
+alias arg1 S5;
 
 if (sysCallNo==1) then // Create
-	alias arg1 S5;
+	
 	arg1=[phySP - 3];
 	counter=FAT;
 	flag=0;
@@ -97,5 +97,120 @@ breakpoint;
 endif;
 
 	
+if(sysCallNo==4) then
+	counter=FAT;
+	flag=0;
+	arg1=[phySP - 3]; //filename
+	alias fatIndex S4;
 	
+	while (counter < FAT + 512) do
+		if([counter]==arg1) then
+			fatIndex= (counter-FAT)/8; flag=1; break;
+		endif;
+		counter=counter + 8;
+	endwhile;
+
+	//if file doesnt exist : failure
+
+	if (flag==0) then
+		[phySP - 2]=-1;
+		ireturn;
+	endif;
+
+	counter=0;
+	
+	//failure if file is open
+
+	while (counter<128) do
+		if([FILE_TABLE + counter +0]==fatIndex) then //file open:entry in syswide OFT
+			[phySP-2]=-1;
+			ireturn;
+		endif;
+		counter=counter+2;
+	endwhile;
+
+	alias basicBl S6;
+	alias dataBl S7;
+	alias iCounter S8;
+
+	basicBl=[FAT + fatIndex*8 + 2];
+
+	counter=SCRATCHPAD;
+
+	while(counter<SCRATCHPAD + 256) do
+		load(1,basicBl);    //load basicBl to scratch pad to clear everything to ""
+		if (([counter] !="") && ([counter]!=-1)) then
+			dataBl=[counter];
+			//load dataaBl to scratchpad and clr everything
+			
+			load(1,dataBl);
+			iCounter=SCRATCHPAD;
+			while(iCounter<SCRATCHPAD+512) do
+				[iCounter]="";
+				iCounter=iCounter+1;
+			endwhile;
+				
+			//store back dataBl
+			store(1,dataBl);
+			
+			[DISK_LIST + dataBl]=0; //free dataBl in mem copy of df 
+
+		endif;
+		counter=counter+1;
+	endwhile;
+
+	//clear everything in basicBl
+
+	counter=SCRATCHPAD;
+	load(1,basicBl);
+	
+	while(counter< SCRATCHPAD+512) do
+		[counter]="";
+		counter=counter+1;
+	endwhile;
+
+	store(1,basicBl);
+	[DISK_LIST + basicBl]=0;
+
+	[FAT + fatIndex*8]=-1;            //invalidate fat entry : arg
+	[FAT + fatIndex*8 +1]=0;	
+	[FAT + fatIndex*8 +2]=-1;   		//basicBl field
+	
+	//store fat and df to disk
+	store(5,19);
+	store(6,20);
+
+	[phySP-2]=0;
+	ireturn;
+endif;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

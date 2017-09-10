@@ -1,0 +1,116 @@
+alias phySP S0;
+phySP=[PTBR + 2*(SP/512)]*512 + SP%512;
+
+alias fileDsc S1;
+alias writeWord S2;
+alias sysCallNo S3;
+alias counter S11;
+alias flag S12;
+
+
+sysCallNo = [phySP -1];
+
+if (sysCallNo == 5) then //write
+	writeWord=[phySP - 3];
+	fileDsc=[phySP - 4];
+	
+	if((fileDsc < 0) || (fileDsc>7)) then	//invalid file descriptor
+		[phySP-2]=-1;
+		ireturn;
+	endif;
+
+	alias currPCB S4;
+	currPCB=READY_LIST + 32*((PTBR-1024)/8); //ready_list + 32*currPID
+	
+//print("hi"); print([currPCB + 15 + 2*fileDsc]); print("hi");
+
+	if ([currPCB + 15 + 2*fileDsc]==-1) then	//pointer to System-wide Open File Table entry invalid
+		[phySP - 2]=-1;				//failure
+		print("not open:error");		
+		ireturn;				
+	endif;
+
+	alias sysIndex S5;
+	alias lseekPos S6;	
+	alias fatIndex S7;
+	alias basicBl S8;	
+	alias dataIndex S9;
+	alias newBl S10;
+		
+	sysIndex= [currPCB + 15 + 2*fileDsc];
+	lseekPos= [currPCB + 15 + 2*fileDsc + 1];
+
+	fatIndex= [FILE_TABLE + sysIndex*2];
+	basicBl= [FAT + fatIndex*8 + 2];
+
+	load(1,basicBl); //load basicblock to scratchpad
+		
+	dataIndex = lseekPos/512;
+
+	//check if this entry is valid in basic block. if not allocate a new data block
+
+	if ([SCRATCHPAD + dataIndex]==-1) then 
+		counter=24;
+		while ( counter < 448) do
+			if ([DISK_LIST + counter]==0) then 	//if a free block is found in df
+				newBl=counter;			
+				[DISK_LIST + newBl]=1;		//freeBlock found : set df entry as 1			
+				break;
+			endif;
+			counter=counter+1;
+		endwhile;
+		
+		if (counter>447) then //no freeBlock found : failure
+			[phySP -2]=-1;
+			print("No space: error");
+			ireturn;
+		endif;
+
+		//add freeBl to basic block
+
+		[SCRATCHPAD + dataIndex] = newBl;
+		
+		store(1,basicBl); 	//commit basic blk back to disk		
+		
+
+		[FAT + fatIndex*8 + 1] = [FAT + fatIndex*8 +1] + 512; 	//increment filesize in fat entry by a block
+	
+		store(5,19);
+		store(6,20); //commit fat and df
+	endif;
+
+	//now there is a valid entry in dataindex of basic block
+	
+	newBl=[SCRATCHPAD + dataIndex];
+	
+	//load the datablock in which word is to be written to scratchpad
+
+	load(1,newBl);
+	//write the word at offset = lseek mod 512
+
+	[SCRATCHPAD + (lseekPos % 512)]=writeWord;
+	
+	store(1,newBl);
+	
+	[currPCB + 15 + 2*fileDsc + 1]=[currPCB + 15 + 2*fileDsc + 1] + 1;  //increment lseekPos by 1. cuz new word is added
+
+	[phySP - 2]=0;
+
+	ireturn;
+endif;
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	

@@ -1,0 +1,158 @@
+alias phySP S0;
+phySP=([PTBR + 2*(SP/512)]*512) + SP%512 ;
+
+alias sysCallNo S1;
+sysCallNo = [phySP - 1];
+
+//args???
+alias counter S2;
+alias flag S3;
+alias arg1 S5;
+alias currPID S8;
+alias perProcessIndex S9;  //per process open file table
+
+
+if (sysCallNo==2) then //for open
+	
+	arg1=[phySP - 3];
+	counter=FAT;
+	flag=-1;
+	
+	while (counter < FAT+512) do
+		if ([counter]==arg1) then   //file is already present
+			flag=1;
+			break;	
+		endif;
+		counter=counter+8;
+	endwhile;
+
+	if (flag==-1) then
+		print ("file not found");
+		[phySP-2]=-1;   //failure if fat entry for file not found
+		ireturn;
+	endif;
+	
+	alias fatEntryIndex S6;
+	fatEntryIndex=(counter - FAT)/8;
+
+	counter=0;
+	flag=0;
+	alias sysIndex S7;	
+		
+	while (counter<128) do    //get sys-wide open table index of the file
+		if ([FILE_TABLE + counter + 0]==fatEntryIndex) then
+			sysIndex=counter;
+			flag=1;
+			break;
+		endif;
+		
+		if ([FILE_TABLE + counter]==-1) then     //free entry found in sys-wide open table
+			sysIndex=counter; flag=1; 
+			break;
+		endif;
+
+		counter=counter+2;
+	endwhile;
+	
+	counter=0;
+	
+	
+
+	if (flag==0) then	//no free entry in sys-wide open table
+		[phySP-2]=-1;	//failure
+		ireturn;
+	endif;
+	
+	
+	currPID = (PTBR-1024)/8;
+	
+	counter=15;
+//	alias perProcessIndex S9;  //per process open file table
+	flag=0;
+	while(counter<=30) do
+		if ([READY_LIST + currPID*32 + counter]==-1) then
+			flag=1;		//free entry found in per-process open file table
+			perProcessIndex=counter;
+			break;
+		endif;
+		counter=counter+2;
+	endwhile;	
+
+	//if no free entry found in per process open file table
+	if (flag==0) then
+		[phySP - 2]=-1;
+		ireturn;
+	endif;
+
+	//set up per process open file table's
+
+	[READY_LIST + currPID*32 + perProcessIndex]=sysIndex; // Pointer to System-Wide File Table Entry
+	[READY_LIST + currPID*32 + perProcessIndex + 1]=0; //Lseek
+
+	//set up sys wide open file table
+
+      breakpoint;
+
+	[FILE_TABLE + sysIndex + 0]=fatEntryIndex; //fat index
+	[FILE_TABLE + sysIndex + 1]=[FILE_TABLE + sysIndex + 1] + 1; //increment open count
+
+      breakpoint;
+
+	[phySP - 2]= (perProcessIndex - 15)/2; // file descriptor for the open instance is returned
+
+	//print("hi"); print( perProcessIndex);
+
+	ireturn;
+endif;
+
+if (sysCallNo == 3) then
+	arg1=[phySP-3];            //file descriptor [0-7]
+
+	if (arg1<0 ||  arg1>7) then	 //invalid file descriptor
+		[phySP - 2]=-1;
+		ireturn;
+	endif;
+	
+	alias currPCB S4;
+
+	currPID = (PTBR-1024)/8;
+	perProcessIndex = arg1*2 + 15;
+	currPCB = READY_LIST + 32*currPID;	
+
+	if ([currPCB + perProcessIndex + 0]==-1) then  //invalid entry in perprocess open file table
+		[phySP - 2]=-1;
+		ireturn;
+	endif;
+
+	//index to systable. decrement count
+ 
+//print("hi"); print( [FILE_TABLE + [currPCB + perProcessIndex] + 1]  ); print("hi");
+
+	[FILE_TABLE + [currPCB + perProcessIndex] + 1] = [FILE_TABLE + [currPCB + perProcessIndex] + 1]-1;
+
+//print("hii"); print( [FILE_TABLE + [currPCB + perProcessIndex] + 1]  ); print("hii");
+
+	if ([FILE_TABLE + [currPCB + perProcessIndex] +1]==0) then
+		[FILE_TABLE + [currPCB + perProcessIndex] ]=-1;
+	endif;
+	
+	//invalidate entry in perprocess open table
+	
+	[currPCB + perProcessIndex]=-1;
+	[currPCB + perProcessIndex + 1]=-1;
+
+	[phySP - 2]=0;
+	ireturn;
+endif;
+
+
+
+
+
+
+
+
+
+
+
+
