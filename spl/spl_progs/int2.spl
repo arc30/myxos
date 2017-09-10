@@ -41,13 +41,13 @@ if (sysCallNo==2) then //for open
 		
 	while (counter<128) do    //get sys-wide open table index of the file
 		if ([FILE_TABLE + counter + 0]==fatEntryIndex) then
-			sysIndex=counter;
+			sysIndex=counter/2;
 			flag=1;
 			break;
 		endif;
 		
 		if ([FILE_TABLE + counter]==-1) then     //free entry found in sys-wide open table
-			sysIndex=counter; flag=1; 
+			sysIndex=counter/2; flag=1; 
 			break;
 		endif;
 
