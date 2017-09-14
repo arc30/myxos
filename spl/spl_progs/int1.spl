@@ -34,7 +34,7 @@ if (sysCallNo==1) then // Create
 breakpoint;
 
 	while (counter < 448) do
-		if ([6*512 + counter]==0) then
+		if ([DISK_LIST + counter]==0) then
                			//6*512 is starting addr of df in memory. if a free block is found
 			freeBl=counter;  break;
 		endif;
@@ -72,9 +72,7 @@ breakpoint;
 	[counter+1]=0; //filesize initialised to 0
 	[counter+2]= freeBl ; //basic block num
 	
-	[DISK_LIST]=1;
-	[DISK_LIST+1]=1;
-	[DISK_LIST+2]=1;
+	
 	load(1,freeBl); // load basicblock to scratchpad
 
 	alias i S6;
@@ -86,7 +84,7 @@ breakpoint;
 
 	store(1,freeBl); //store basicblock to disk from scratchpad	
 
-	[6*512 + freeBl]=1; //entry for basicblock in df set to 1
+	[DISK_LIST + freeBl]=1; //entry for basicblock in df set to 1
 	
 	store(5,19); //store fat
 	store(6,20); //store df
@@ -97,7 +95,7 @@ breakpoint;
 endif;
 
 	
-if(sysCallNo==4) then
+if(sysCallNo==4) then		//delete
 	counter=FAT;
 	flag=0;
 	arg1=[phySP - 3]; //filename
@@ -124,6 +122,7 @@ if(sysCallNo==4) then
 	while (counter<128) do
 		if([FILE_TABLE + counter +0]==fatIndex) then //file open:entry in syswide OFT
 			[phySP-2]=-1;
+		print("Cnt@Open"); print(counter);
 			ireturn;
 		endif;
 		counter=counter+2;

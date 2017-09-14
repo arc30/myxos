@@ -37,15 +37,25 @@ if (sysCallNo == 5) then //write
 	alias dataIndex S9;
 	alias newBl S10;
 		
-	sysIndex= [currPCB + 15 + 2*fileDsc];
+	sysIndex= [currPCB + 15 + 2*fileDsc];           //print("sysInd");print(sysIndex);
 	lseekPos= [currPCB + 15 + 2*fileDsc + 1];
 
 	fatIndex= [FILE_TABLE + sysIndex*2];
 	basicBl= [FAT + fatIndex*8 + 2];
 
+//print("basicB");print(basicBl);	
+	
 	load(1,basicBl); //load basicblock to scratchpad
 		
-	dataIndex = lseekPos/512;
+	dataIndex = lseekPos/512;		//print("dataInd");print(dataIndex); 
+
+	//what if dataIndex>256 ? invalid !
+		
+	if(dataIndex>=256) then
+			[phySP-2]=-1; print("invalidDataInd"); ireturn;
+	endif;
+
+//print("dat");print([SCRATCHPAD + dataIndex]);			
 
 	//check if this entry is valid in basic block. if not allocate a new data block
 

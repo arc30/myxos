@@ -19,8 +19,9 @@ integer main()
 	//print("seekStatus");print(status);	
 
 	//create a new file
-	//status= Create("file1.dat");
-	//print("status:create");print(status);
+	
+	status= Create("file1.dat");
+	print("status:create");print(status);
 			
 	//status = Read(0,readStatus);
 	//print(status);
@@ -28,6 +29,12 @@ integer main()
 	
 	fileDsc=Open("file1.dat");
 	print("fileDsc:"); print(fileDsc);
+
+
+//del while file is open
+	
+	status=Delete("file1.dat");
+	print("delStatus:");print(status);
 
 	//status = Read(fileDsc,readStatus);
 	//print(status);
@@ -38,15 +45,15 @@ integer main()
 	//status=Write(fileDsc,"peace");
 	//print("write:status"); print(status);
 	
-	status=Write(fileDsc,"yo");
-	print("write:status"); print(status);
+	//status=Write(fileDsc,"yo");
+	//print("write:status"); print(status);
 
 	//status=Seek(fileDsc,2);
 	//print("lseekTo2"); print(status);
 
-	status = Read(fileDsc,readStatus);
-	print(status);
-	print("readword:"); print(readStatus);
+	//status = Read(fileDsc,readStatus);
+	//print(status);
+	//print("readword:"); print(readStatus);
 
 	
 	//status=Write(fileDsc,"yo");
@@ -55,6 +62,9 @@ integer main()
 
 	status=Close(fileDsc);
 	print("close:status");print(status);
+
+	status=Delete("file1.dat");
+	print("delStatus:");print(status);
 
 	return 0;
 }

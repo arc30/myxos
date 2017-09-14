@@ -63,9 +63,7 @@ if(sysCallNo == 2) then		//open sys call
 
 	while(counter<=7) do	//search for free entry in perprocess OFT
 		if([currPCB + 15 + 2*counter] ==-1) then
-				
-						
-			fileDsc=counter;flag=1;break;		//bug fixd?? :P
+			fileDsc=counter;flag=1;break;
 		endif;
 		counter=counter+1;
 	endwhile;
