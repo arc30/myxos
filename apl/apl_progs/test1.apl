@@ -1,4 +1,7 @@
 
+//merging 2 files into a new one. stage8 test 
+
+
 integer main()
 {
 integer stat1,stat2,stat3,counter,x,y,z,num1,num2,num3;
@@ -12,7 +15,7 @@ breakpoint;
 stat2=Open("f2.dat");
 breakpoint;
 
-counter=Delete("f3.dat");
+//counter=Delete("f3.dat");
 
 stat3=Create("f3.dat");
 

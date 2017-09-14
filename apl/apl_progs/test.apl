@@ -1,5 +1,8 @@
 
 
+//creating 2 files for stage8 test
+
+
 integer main()
 {
 integer status,status2,status3;

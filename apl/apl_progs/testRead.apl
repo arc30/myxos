@@ -21,20 +21,25 @@ integer main()
 	//create a new file
 	
 	status= Create("file1.dat");
-	print("status:create");print(status);
+	status= Create("file2.dat");
+
+	//print("status:create");print(status);
 			
 	//status = Read(0,readStatus);
 	//print(status);
 	//print("readword:"); print(readStatus);
 	
-	fileDsc=Open("file1.dat");
-	print("fileDsc:"); print(fileDsc);
+	fileDsc1=Open("file1.dat");
+	fileDsc2=Open("file2.dat");
+	
+	
+	//print("fileDsc:"); print(fileDsc);
 
 
 //del while file is open
 	
-	status=Delete("file1.dat");
-	print("delStatus:");print(status);
+	//status=Delete("file1.dat");
+	//print("delStatus:");print(status);
 
 	//status = Read(fileDsc,readStatus);
 	//print(status);
@@ -63,8 +68,8 @@ integer main()
 	status=Close(fileDsc);
 	print("close:status");print(status);
 
-	status=Delete("file1.dat");
-	print("delStatus:");print(status);
+	//status=Delete("file1.dat");
+	//print("delStatus:");print(status);
 
 	return 0;
 }
