@@ -159,9 +159,11 @@ breakpoint;
 		[READY_LIST + 32* childPID + counter]=[READY_LIST + 32*parentPID + counter];    //sysIndex
 		[READY_LIST + 32* childPID + counter+1]=[READY_LIST + 32*parentPID + counter+1]; //lseekPos
 
-	    if ([READY_LIST + 32*parentPID + counter] != -1) then	//valid entry then increment file count in syswide table 	
+		flag=[READY_LIST + 32*parentPID + counter];    //sysindex
+
+	    if ( flag != -1) then	//valid entry then increment file count in syswide table 	
 		
-		[FILE_TABLE + 2*[READY_LIST + 32* childPID + counter] + 1] = [FILE_TABLE + 2*[READY_LIST + 32* childPID + counter] + 1]+1;
+		[FILE_TABLE + 2*flag + 1] = [FILE_TABLE + 2*flag + 1]+1;
 
 	    endif;
 	    counter=counter+1;
