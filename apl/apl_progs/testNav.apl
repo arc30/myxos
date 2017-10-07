@@ -17,10 +17,13 @@ endwhile;
 stat2=Create("file2.dat");
 stat2=Open("file2.dat");
 
-j=Seek(stat1,0);
+j=Close(stat1);
+stat1=Open("file1.dat");
+
+//j=Seek(stat1,0);
 j=Read(stat1,word1);
 
-i=Delete("file1.dat");
+
 
 while(word1 != "") do
 	i=Write(stat2,word1);
@@ -28,15 +31,18 @@ while(word1 != "") do
 endwhile;
 
 breakpoint;
+
+j=Seek(stat2,600);
+
 i=Close(stat1);
 i=Close(stat2);
 
 //breakpoint;
 
-i=Delete("file1.dat");
+//i=Delete("file1.dat");
 //breakpoint;
-i=Delete("file2.dat");
-print("fil2Del");print(i);
+//i=Delete("file2.dat");
+//print("fil2Del");print(i);
 //breakpoint;
 
 return 0;

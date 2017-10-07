@@ -1,0 +1,324 @@
+
+
+alias phySP S0;
+phySP=([PTBR + 2*(SP/512)]*512) + SP%512 ;
+
+alias sysCallNo S1;
+sysCallNo = [phySP - 1];
+
+//args???
+alias counter S2;
+alias flag S3;
+alias arg1 S5;
+
+if (sysCallNo==1) then // Create
+	
+	arg1=[phySP - 3];
+	counter=FAT;
+	flag=0;
+	
+	while (counter < FAT+512) do
+		if ([counter]==arg1) then
+			[phySP - 2]=0;    //return 0 with success
+			ireturn;	
+		endif;
+		counter=counter+8;
+	endwhile;		
+		
+	
+
+	counter=24; //24 to 447 blocks can be used by user. search in df
+	alias freeBl S4;
+	freeBl=-1;
+	
+breakpoint;
+
+	while (counter < 448) do
+		if ([DISK_LIST + counter]==0) then
+               			//6*512 is starting addr of df in memory. if a free block is found
+			freeBl=counter;  break;
+		endif;
+		counter=counter+1;
+	endwhile;
+		
+	if (freeBl==-1) then
+		//return from call with value -1
+		[phySP - 2]=-1;
+		ireturn;
+	endif;	
+
+	//search for free entry in FAT. word 2 of an entry
+	
+	counter=FAT;
+	flag=0;
+	
+	while (counter < FAT+512) do
+		if ([counter + 2] ==-1) then
+		 	flag=1; break;
+		endif;
+		counter=counter+8;
+	endwhile;
+	
+	if (flag==0) then 
+		//no free fat entry for basic block
+		[phySP - 2]=-1;
+		ireturn;
+	endif;
+	
+	//free entry is found
+	//set fields of fat table
+	
+	[counter]=arg1; //filename is arg
+	[counter+1]=0; //filesize initialised to 0
+	[counter+2]= freeBl ; //basic block num
+	
+	
+	load(1,freeBl); // load basicblock to scratchpad
+
+	alias i S6;
+ 	i=512;
+	while (i< (512+256)) do
+		[i]=-1;
+		i=i+1;
+	endwhile;
+
+	store(1,freeBl); //store basicblock to disk from scratchpad	
+
+	[DISK_LIST + freeBl]=1; //entry for basicblock in df set to 1
+	
+	store(5,19); //store fat
+	store(6,20); //store df
+
+	[phySP-2]=0;
+	
+	ireturn;
+endif;
+
+	
+if(sysCallNo==4) then		//delete
+	counter=FAT;
+	flag=0;
+	arg1=[phySP - 3]; //filename
+	alias fatIndex S4;
+	
+	while (counter < FAT + 512) do
+		if([counter]==arg1) then
+			fatIndex= (counter-FAT)/8; flag=1; break;
+		endif;
+		counter=counter + 8;
+	endwhile;
+
+	//if file doesnt exist : failure
+
+	if (flag==0) then
+		[phySP - 2]=-1;
+		ireturn;
+	endif;
+
+	counter=0;
+	
+	//failure if file is open
+
+	while (counter<128) do
+		if([FILE_TABLE + counter +0]==fatIndex) then //file open:entry in syswide OFT
+			[phySP-2]=-1;
+		print("Cnt@Open"); print(counter);
+			ireturn;
+		endif;
+		counter=counter+2;
+	endwhile;
+
+	alias basicBl S6;
+	alias dataBl S7;
+	alias iCounter S8;
+
+	basicBl=[FAT + fatIndex*8 + 2];
+
+	alias numOfDataBl S9;
+	numOfDataBl = [FAT + fatIndex*8 + 1] / 512;
+
+	//a new file backup need to be created :::: assuming it isnt creatd and is not opened
+
+	alias freeCount S10;
+	freeCount=0;
+	
+	alias newFatIndex S11;	
+	
+	counter=24;
+	
+	while(counter<448) do
+		if( [DISK_LIST + counter] == 0) then
+			freeCount=freeCount+1;
+		endif;
+		counter=counter+1;
+	endwhile;
+
+	if(freeCount < (numOfDataBl +1 )) then 		//+basicblock
+		[phySP - 2]=-1;
+		ireturn;
+	endif; 						//enough free space is found in disk
+
+	counter=FAT;
+
+	while(counter < FAT+512 ) do
+		if( [counter]=="backup.dat") then 
+			print("mayCorruptErr");				//if backup already exists,it may corrupt data. throw an err
+			[phySP-2]=-1; ireturn;
+		endif;
+		counter=counter+8;
+	endwhile;	 
+		
+	counter=FAT;					//check for free space in fat entry
+	flag=0;
+	
+	while (counter < FAT+512) do
+		if ([counter + 2] ==-1) then
+		 	flag=1; newFatIndex=(counter - FAT)/8; 
+			break;
+		endif;
+		counter=counter+8;
+	endwhile;
+	
+	if (flag==0) then 
+		//no free fat entry for basic block
+		[phySP - 2]=-1;
+		ireturn;
+	endif;
+
+
+	alias newBasicBl S10;
+	
+	counter=24;
+	while (counter<448) do
+		if([DISK_LIST + counter] == 0) then 		//for basicBl
+			newBasicBl=counter; break;
+		endif;
+		counter=counter+1;
+	endwhile;
+
+	[DISK_LIST + newBasicBl]=1;  //mark basicblock
+
+	alias newDataBl_i S12;
+	
+
+	[FAT + newFatIndex*8]="backup.dat";
+	[FAT + newFatIndex*8 + 1]= [FAT + fatIndex*8 +1];
+	[FAT + newFatIndex*8 + 2]= newBasicBl;
+
+
+	load(1,newBasicBl);
+	flag=SCRATCHPAD;
+	while (flag<SCRATCHPAD+256) do
+		[flag]=-1; flag=flag+1;
+	endwhile;
+	store(1,newBasicBl);
+	
+	iCounter=numOfDataBl;
+	
+
+
+	while(iCounter > 0) do
+	
+
+		counter=24; 
+		while (counter<448) do
+			if([DISK_LIST + counter] == 0) then 		
+				newDataBl_i=counter; break;
+			endif;
+			counter=counter+1;
+		endwhile;
+			
+			[DISK_LIST + newDataBl_i]=1;   //mark it in df
+
+		load(1,newBasicBl);
+		flag=SCRATCHPAD;
+		while (flag<SCRATCHPAD + 256) do
+			if ([flag]==-1) then
+				[flag]=newDataBl_i; break;
+			endif;
+			flag=flag+1;
+		endwhile;
+		store(1,newBasicBl);
+					
+			
+
+		iCounter=iCounter-1;
+	endwhile;
+
+
+	//iCounter=0;
+	//counter=0;
+	counter=SCRATCHPAD;
+	iCounter=SCRATCHPAD;
+
+	while(numOfDataBl>0) do
+		//load each data block of file 1. store it into corr dataBl of file2
+		
+		load(1,basicBl);
+		
+		while(counter < SCRATCHPAD + 256) do
+			if([counter]!=-1) then
+				dataBl=[counter]; counter=counter+1; break;
+			else
+			counter=counter+1;
+			endif;
+		endwhile;		
+		
+		load(1,newBasicBl);
+		
+		while(iCounter < SCRATCHPAD + 256) do
+			if([iCounter]!=-1) then
+				newDataBl_i=[iCounter]; iCounter=iCounter+1; break;
+			else
+			iCounter=iCounter+1;
+			endif;
+		endwhile;
+
+		//now dataBl needs to be copied to newDataBl_i
+
+		load(1,dataBl);
+		store(1,newDataBl_i);
+
+		numOfDataBl=numOfDataBl-1;
+	endwhile;
+
+
+	
+	//store fat and df to disk
+	store(5,19);
+	store(6,20);
+
+	[phySP-2]=0;
+	ireturn;
+endif;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

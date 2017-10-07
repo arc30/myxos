@@ -1,0 +1,213 @@
+alias phySP S0;
+alias sysCallNo S1;
+alias counter S2;
+alias flag S3;
+
+phySP=[PTBR + 2*(SP/512)]*512 + SP%512;
+
+sysCallNo=[phySP - 1];
+
+if(sysCallNo==9) then
+	alias arg1 S4;
+	arg1=[phySP-3]; //filename
+
+	counter=FAT;
+	flag=0;
+	alias fatIndex S5;
+
+	while(counter < FAT+512) do
+		if([counter]==arg1) then 	//filename present
+			flag=1; fatIndex=(counter-FAT)/8; break;
+		endif;
+		counter=counter+8;
+	endwhile;
+
+	if(flag==0) then
+		[phySP-2]=-1;
+		print("invalidArgument");
+		ireturn;
+	endif;
+
+	alias basicBl S6;
+	basicBl=[FAT + 8*fatIndex + 2];
+	
+	//load basic blk to scratchpad
+
+	load(1,basicBl);
+	counter=SCRATCHPAD;
+
+	alias codeBlCountNewPgm S7;
+	alias codePageCountCurrProcess S8;	
+
+	codeBlCountNewPgm=0;
+	codePageCountCurrProcess=0;
+
+	while(counter< SCRATCHPAD+256) do			//count the num of codeBlocks in new program
+		if([counter]!=-1 && [counter]!="") then
+			codeBlCountNewPgm=codeBlCountNewPgm+1;
+		endif;
+		counter=counter+1;
+	endwhile;
+	
+	counter=0;
+	while(counter<3) do 	//excluding the 4th entry for stack
+		if([PTBR + 2*counter +1]=="01" || [PTBR + 2*counter +1]=="11") then 
+			codePageCountCurrProcess=codePageCountCurrProcess+1;
+		endif;
+		counter=counter+1;
+	endwhile;
+
+	if (codeBlCountNewPgm>3 || codePageCountCurrProcess>3) then
+		[phySP-2]=-1;
+		print("ERRCodeBlCnt");
+		ireturn;
+	endif;
+
+
+	alias excessPages S9;
+	excessPages = codePageCountCurrProcess - codeBlCountNewPgm;
+
+	counter=2;
+	while (excessPages>0 && counter>=0) do		//deallocate them in curr pt and mem list
+	    if([PTBR + 2*counter +1]=="01" || [PTBR + 2*counter +1]=="11") then
+
+		[MEM_LIST + [PTBR + 2*counter] ]=0; 	//free that page in memfree list		
+		[PTBR + 2*counter]=-1;
+		[PTBR + 2*counter +1]="00";
+		excessPages=excessPages-1;
+
+	    endif;
+		counter=counter-1;
+	endwhile;
+
+	excessPages = codeBlCountNewPgm - codePageCountCurrProcess; //if more pages need to be alloted
+
+	alias newPage S10;
+	alias index S11;
+	
+	flag=0;
+	index=0;
+	if (excessPages>0) then
+		counter=MEM_LIST;
+		while(counter< MEM_LIST + 64) do
+			if([counter]==0) then 		//free page
+				index=index+1;
+			endif;
+		counter=counter+1;
+		endwhile;
+
+		if(index<excessPages) then 	//not enough space in mem
+			[phySP -2]=-1;
+			ireturn;
+		endif;
+	endif;
+	
+	counter=0;		//if newPgm requires more codeblocks
+	index=29;
+	
+
+	while(excessPages>0 && counter<3) do
+			
+     	    if([PTBR + 2*counter]==-1) then
+			flag=0;		
+		while(index<64) do
+			if([MEM_LIST + index]==0) then//free page
+				newPage=index; flag=1;
+				[MEM_LIST + index]=1; //mark it as used
+				break;
+			endif;
+			index=index+1;
+		endwhile;
+		
+		if(flag==0) then 	// memory underflow
+			[phySP -2]=-1; print("memUnderflow");
+			ireturn;
+		endif;
+
+		[PTBR + 2*counter]=newPage;
+		[PTBR + 2*counter +1]="01";
+
+	    endif;
+	    counter=counter+1;
+	    excessPages=excessPages-1;
+	endwhile;
+
+		
+	counter=0;
+	load(1,basicBl);
+	index=SCRATCHPAD;
+												
+				//Load the blocks of the file to the memory in pages of the current process. 
+	while(counter<3) do
+		if([PTBR + 2*counter+1]=="01" || [PTBR + 2*counter+1]=="11" ) then
+
+			while(index< SCRATCHPAD+256) do			//find codeBlock in new program
+				if([index]!=-1 && [index]!="") then
+					newPage=[index]; index=index+1; break;
+				endif;
+				index=index+1;
+			endwhile;
+			load([PTBR+2*counter],newPage);
+		endif;
+		counter=counter+1;
+	endwhile;		
+		
+
+	alias fileDsc S12;
+	alias sysIndex S13;
+	alias currPCB S14;
+		//close all files opened by this curr process	
+	
+	currPCB=READY_LIST + 32*(PTBR-1024)/8 ;
+
+	fileDsc=0;
+
+	while(fileDsc<8) do
+		sysIndex=[currPCB + 2*fileDsc + 15];
+		if(sysIndex!=-1) then
+			[FILE_TABLE + 2*sysIndex + 1] = [FILE_TABLE + 2*sysIndex + 1]-1;
+		
+			if ([FILE_TABLE + 2*sysIndex +1]==0) then
+				[FILE_TABLE + 2*sysIndex ]=-1;
+			endif;
+		
+		//invalidate entry in perprocess open table
+	
+		[currPCB + fileDsc*2 + 15]=-1;
+		[currPCB + fileDsc*2 + 15 + 1]=-1;
+		
+		endif;
+
+	fileDsc=fileDsc+1;
+	endwhile;
+
+	SP=3*512; //the logical address of starting address of stack when a new process is loaded to memory.
+
+	[[PTBR + 2*(SP/512)]*512 + SP%512]=0;  //set ip of new pgm as 0
+
+	ireturn;
+endif;
+
+
+
+
+
+
+
+
+
+
+
+		
+	
+	
+
+
+
+
+
+
+
+			
+
+

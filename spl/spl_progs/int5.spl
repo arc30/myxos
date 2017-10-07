@@ -1,0 +1,184 @@
+alias phySP S0;
+
+phySP =  [PTBR + 2*(SP/512)]*512 + SP%512;
+
+alias sysCallNo S1;
+sysCallNo = [phySP - 1];
+
+alias counter S11;
+alias flag S2;
+
+
+if(sysCallNo==8) then
+	alias childPID S3;
+	counter=READY_LIST;
+	flag=0;	
+
+	while(counter<READY_LIST + 1024) do	//scan for free pcb
+		if([counter+1]==0) then	//free pcb found is state 0				
+			childPID=(counter - READY_LIST)/32; flag=1; break;
+		endif;
+	counter=counter+32;
+	endwhile;
+
+	if(flag==0) then
+		[phySP-2]=-1;
+		ireturn;
+	endif;
+
+breakpoint;
+
+	[counter]=childPID; 	//sets pid of child process
+	alias validPageCnt S4;
+	validPageCnt=0;
+
+	counter=PTBR;   //now check for valid pages in page  table
+	
+	while(counter<PTBR + 8) do
+		if([counter+1]=="01" || [counter+1]=="11") then 	//valid bit is set
+			validPageCnt=validPageCnt+1;
+		endif;
+	counter=counter+2;
+	endwhile;
+	
+	if(validPageCnt>4) then
+		print(">4pagesErr");
+		[phySP-2]=-1;
+		ireturn;
+	endif;
+	
+
+	//check if memfreelist has enough space for these pages
+
+	alias freeCnt S5;
+	
+	counter=MEM_LIST;
+
+	freeCnt=0;
+	while(counter<MEM_LIST+64) do
+		if([counter]==0) then //free page
+			freeCnt=freeCnt+1;
+		endif;
+	counter=counter+1;
+	endwhile;
+
+	if(freeCnt<validPageCnt) then //err
+		print("no freeSpace");
+		[phySP-2]=-1;
+		ireturn;
+	endif;
+
+	alias parentPTBR S6;
+	alias childPTBR S7;
+
+	parentPTBR=PTBR;
+	childPTBR=PAGE_TABLE +8*childPID;
+
+	 counter=29;
+	alias index S8;
+	index=0;
+
+breakpoint;
+
+	while(index<4) do
+	
+	
+            	    if([parentPTBR + 2*index + 1]=="00" || [parentPTBR + 2*index + 1]=="10") then	//all invalid entries	 		
+
+ 			[childPTBR + 2*index ]=[parentPTBR + 2*index];
+			
+		    else 
+
+			while(counter<64) do  
+			  if([MEM_LIST + counter]==0) then //free page		
+			    [childPTBR + 2*index]=counter;  //assign this page to childprocess
+			    [MEM_LIST + counter]=1;  //mark it as used
+			    break;	
+			  endif;
+			counter=counter+1;
+			endwhile;
+
+		    endif;
+			[childPTBR + 2*index +1]=[parentPTBR + 2*index+1];  //aux info    same 							
+		index=index+1;
+			
+	endwhile;
+
+	index=0; counter=0;
+
+	alias newPage S9;
+	alias oldPage S10;
+
+	alias parentPID S12;
+	parentPID = (PTBR - 1024)/8;
+
+	//duplicate each page of parent process in child process	
+					
+breakpoint;	
+
+	while(index<4) do
+
+		newPage=[childPTBR  + 2*index];
+		oldPage=[parentPTBR + 2*index];
+
+	    if([childPTBR +  2*index +1] !="00" && [childPTBR +  2*index +1] !="10" ) then 	//if page is valid, copy
+		counter=0;
+		while(counter<512) do
+			[newPage*512 + counter]=[oldPage*512 + counter];
+			counter=counter+1;
+		endwhile;
+	    endif;
+
+		index=index+1;
+
+	endwhile;
+
+
+	[READY_LIST + 32*childPID + 5]=childPTBR ; //setting ptbr field in pcb of child process
+	[READY_LIST + 32*childPID + 4]=[phySP] ; //set ip value in pcb of child process as logical ip of parent process
+	[READY_LIST + 32*childPID + 3]=SP-1;    //sp of child process. manually remove the ip on top
+
+	[READY_LIST + 32*childPID + 1]=1;      //state as ready
+	[READY_LIST + (32 * childPID) + 2] = BP;
+  	[READY_LIST + (32 * childPID) + 6] = PTLR;
+  	[READY_LIST + (32 * childPID) + 7] = R0;
+	[READY_LIST + (32 * childPID) + 8] = R1;
+	[READY_LIST + (32 * childPID) + 9] = R2;
+	[READY_LIST + (32 * childPID) + 10] = R3;
+	[READY_LIST + (32 * childPID) + 11] = R4;
+	[READY_LIST + (32 * childPID) + 12] = R5;
+	[READY_LIST + (32 * childPID) + 13] = R6;	
+	[READY_LIST + (32 * childPID) + 14] = R7;
+	
+	//copy per process open file table to child process
+
+breakpoint;
+
+	counter=15;
+	while(counter<31) do
+		[READY_LIST + 32* childPID + counter]=[READY_LIST + 32*parentPID + counter];    //sysIndex
+		[READY_LIST + 32* childPID + counter+1]=[READY_LIST + 32*parentPID + counter+1]; //lseekPos
+
+	    if ([READY_LIST + 32*parentPID + counter] != -1) then	//valid entry then increment file count in syswide table 	
+		
+		[FILE_TABLE + 2*[READY_LIST + 32* childPID + counter] + 1] = [FILE_TABLE + 2*[READY_LIST + 32* childPID + counter] + 1]+1;
+
+	    endif;
+	    counter=counter+1;
+	endwhile;
+
+	[phySP-2]=childPID ; //returning child pid to parent
+
+	alias childPhySP S13;
+
+	childPhySP =  [childPTBR + 2*((SP-1)/512)]*512 + (SP-1)%512;
+	[childPhySP-1]=-2;
+
+	ireturn;
+endif;
+
+
+
+
+
+
