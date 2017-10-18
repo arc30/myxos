@@ -31,7 +31,7 @@ alias phyPage S4;
 alias flag S6;
 phyPage=[PTBR + 2*VPagenum];
 
-print("phyPg");print(phyPage);
+//print("phyPg");print(phyPage);
 
 if (phyPage == -1) then
 	print("Invalid add");

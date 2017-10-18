@@ -37,7 +37,7 @@ if(sysCallNo==8) then
 	
 	
 
-	//check if memfreelist has enough space for these pages
+	//check if memfreelist has enough space 
 
 	alias freeInd S5;
 	alias index S8;
@@ -73,6 +73,8 @@ if(sysCallNo==8) then
 		endif;
 	counter=counter+1;
 	endwhile;
+
+
 
 	if(flag==0) then //err
 		print("nofreeStack");		//shud b modified
@@ -124,7 +126,7 @@ if(sysCallNo==8) then
 			endwhile;
 			
 			if(flagI==0) then 	//no freeBlock
-				inline "JMP 11776";
+				inline "JMP 11776";	//exit 	//bug here? where is sysCallno?? when it goes to int5
 			endif;
 			
 			//store victimpage in freeBl
