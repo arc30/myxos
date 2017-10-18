@@ -1,0 +1,188 @@
+alias physp S0;
+alias scno S1;
+physp=([PTBR+2*((SP)/512)]*512)+((SP)%512);
+scno=[physp-1];
+
+if(scno==8) then
+	//print("hello");
+	breakpoint;
+	alias counter S2;
+	counter=0;
+	
+	alias pcb_index S3;		
+	while(counter<32) do		//search ready list of pcb for free entry
+		if([READY_LIST+(32*counter)+1]==0) then
+			pcb_index=counter;
+			break;
+		endif;
+		counter=counter+1;
+	endwhile;
+	
+	if(counter>=32) then
+		[physp-2]=-1;
+		ireturn;
+	endif;
+	
+	[READY_LIST+(32*pcb_index)]=pcb_index;		//set PID
+	
+	counter=24;
+	while(counter<64) do
+		if([MEM_LIST+counter]==0) then
+			break;
+		endif;
+		counter=counter+1;
+	endwhile;
+	
+	if(counter>=64) then
+		//print("fork");
+		alias ptbr S8;
+		alias i S9;
+		alias victim S10;
+		//page=page+2;
+		ptbr=PTBR;
+		while(1) do
+			if(ptbr>1279) then
+				ptbr=1024;
+			endif;
+			if(ptbr%8==6) then
+				ptbr=ptbr+2;
+				continue;
+			endif;
+			if([MEM_LIST+[ptbr]]>1) then
+				ptbr=ptbr+2;
+				continue;
+			endif;
+			//if([ptbr+page+1]=="10")then
+			//	[ptbr+page+1]="00";
+			//endif;
+			if([ptbr+1]=="11")then
+				[ptbr+1]="01";
+				ptbr=ptbr+2;
+				continue;
+			endif;
+			if([ptbr+1]=="01")then
+				i=DISK_LIST+448;
+				while(i<DISK_LIST+512 && [i]!=0) do
+					i=i+1;
+				endwhile;
+				if(i>=DISK_LIST+512) then
+					inline "JMP 11776";
+				endif;
+				[i]=[i]+1;
+				victim=[ptbr];
+				store(victim,i-DISK_LIST);
+				[ptbr]=i-DISK_LIST;
+				[ptbr+1]="00";
+				//mem_pg=victim;
+				break;			
+			endif;
+			ptbr=ptbr+2;
+		endwhile;
+		counter=victim;
+	endif;
+	breakpoint;
+	//print("hey");
+	
+	[MEM_LIST+counter]=1;
+	
+	alias parent_stack S5;
+	parent_stack=[PTBR+6];
+	
+	
+	alias c S4;
+	c=0;
+	while(c<512) do
+		[counter*512+c]=[parent_stack*512+c];
+		c=c+1;
+	endwhile;
+	
+	
+	alias child_pid S5;
+	child_pid=[READY_LIST+(32*pcb_index)];
+	
+	alias child_ptbr S6;
+	child_ptbr=1024+(child_pid*8);
+	
+	[child_ptbr+6]=counter;
+	[child_ptbr+7]="01";
+	
+	c=0;
+	alias page S7;
+	while(c<6) do
+		[child_ptbr+c]=[PTBR+c];
+		[child_ptbr+c+1]=[PTBR+c+1];
+		if([PTBR+c+1]=="01" || [PTBR+c+1]=="11") then
+			page=[PTBR+c];
+			[MEM_LIST+page]=[MEM_LIST+page]+1;
+		endif;
+		
+		if(([PTBR+c+1]=="00") && ([PTBR+c]>=448)) then
+			[DISK_LIST+[PTBR+c]]=[DISK_LIST+[PTBR+c]]+1;
+			store(6,20); 
+		endif;
+		
+		c=c+2;
+	endwhile;
+	
+				//should df be stored each time inside loop?
+			
+	
+	alias newpcb S8;
+	newpcb=READY_LIST+(32*pcb_index);
+	
+	alias oldpid S10;
+	oldpid=(PTBR-1024)/8;
+	
+	alias oldpcb S11;
+	oldpcb=READY_LIST+(32*oldpid);
+	
+		
+	//[newpcb+1]=1;
+	[newpcb+2]=BP;
+	[newpcb+3]=SP-1;
+	[newpcb+4]=[physp];
+	[newpcb+5]=child_ptbr;
+	[newpcb+6]=[oldpcb+6];
+	[newpcb+7]=R0;
+	[newpcb+8]=R1;
+	[newpcb+9]=R2;
+	[newpcb+10]=R3;
+	[newpcb+11]=R4;
+	[newpcb+12]=R5;
+	[newpcb+13]=R6;
+	[newpcb+14]=R7;
+	
+	alias ppoft S10;
+	ppoft=oldpcb+15;
+	
+	alias newppoft S12;
+	newppoft=newpcb+15;
+	
+	alias swoft S13;
+	
+	c=0;
+	while(c<16) do
+		[newppoft+c]=[ppoft+c];
+		[newppoft+c+1]=[ppoft+c+1];
+		if([ppoft+c]!=-1) then
+			swoft=[ppoft+c];
+			[FILE_TABLE+(2*swoft)+1]=[FILE_TABLE+(2*swoft)+1]+1;
+		endif;
+		c=c+2;
+	endwhile;
+	
+	[newpcb+1]=1;
+	[physp-2]=child_pid;
+	
+	alias child_physp S12;
+	child_physp=([child_ptbr+2*((SP-1)/512)]*512)+((SP-1)%512);
+	[child_physp-1]=-2;
+	breakpoint;
+	ireturn;
+endif;
+ireturn;
+	
+	
+	
+	
+			

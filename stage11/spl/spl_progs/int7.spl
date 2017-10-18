@@ -1,0 +1,206 @@
+alias phySP S0;
+alias sysCallNo S1;
+alias counter S2;
+alias flag S3;
+alias currPCB S4;
+
+phySP=[PTBR + 2*(SP/512)]*512 + SP%512;
+currPCB=READY_LIST + 32*(PTBR-1024)/8;
+alias newPCB S7;
+
+
+sysCallNo=[phySP - 1];
+
+if(sysCallNo==13) then		//wait
+	alias waitingPID S8;
+	alias currPID S9;
+	waitingPID=[phySP-3];
+
+	alias waitingState S10;
+	waitingState=[READY_LIST + 32*waitingPID +1];
+
+	currPID=(PTBR-1024)/8;
+
+	if(waitingState == 2 || waitingState==0) then 	//if state is 0 or 2 err
+		[phySP-2]=-1;
+		ireturn;
+	endif;
+
+	//change currProcess state to 100+waitingpid
+
+	[READY_LIST + 32*currPID + 1]=100+waitingPID;
+
+	//save all the values into pcb of currProcess.
+	// it is gonna wait for this newPRoc to sig or exit
+
+	[currPCB]=currPID;
+	[currPCB+2]=BP;
+	[currPCB+3]=SP-1;
+	[currPCB+4]=[phySP];
+	[currPCB+5]=PTBR;
+	[currPCB + 6] = PTLR;
+	[currPCB + 7] = R0;
+	[currPCB + 8] = R1;
+	[currPCB + 9] = R2;
+	[currPCB + 10] = R3;
+	[currPCB + 11] = R4;
+	[currPCB + 12] = R5;
+	[currPCB + 13] = R6;
+	[currPCB + 14] = R7;
+	
+	newPCB=currPCB+32;
+	[phySP-2]=0;
+
+endif;
+
+
+
+
+
+
+if(sysCallNo==10) then		//exit
+
+	//resume all processes with STATE value as 100+processID in the PCB
+
+	counter=READY_LIST;
+	while(counter<READY_LIST+1024) do
+		if([counter+1]==100+(PTBR-1024)/8) then
+			[counter+1]=1;
+		endif;
+		counter=counter+32;
+	endwhile;
+
+
+		
+	//check if there's any process in ready
+		
+	
+	counter=READY_LIST;
+	flag=0;
+	while(counter<READY_LIST + 1024) do
+		if([counter + 1]==1) then 	//state of a pcb is ready	
+			flag=1;	
+			//newPCB=counter;	
+			break;
+		endif;
+	counter=counter+32;
+	endwhile;
+
+	if(flag==0) then      //halt the pgm then and there
+		print("exit");halt;
+	endif;
+
+	
+	alias sysIndex S5;
+	alias fileDsc S6;
+
+	fileDsc=0;
+	
+
+//print("inExit");
+//print([currPCB]);	
+	//Close all open instances of files by the process as done for Close system call.
+
+	while(fileDsc<8) do
+		sysIndex=[currPCB + 2*fileDsc + 15];
+		if(sysIndex!=-1) then
+			[FILE_TABLE + 2*sysIndex + 1] = [FILE_TABLE + 2*sysIndex + 1]-1;
+		
+			if ([FILE_TABLE + 2*sysIndex +1]==0) then
+				[FILE_TABLE + 2*sysIndex ]=-1;
+			endif;
+		
+		//invalidate entry in perprocess open table
+	
+		[currPCB + fileDsc*2 + 15]=-1;
+		[currPCB + fileDsc*2 + 15 + 1]=-1;
+		
+		endif;
+
+	fileDsc=fileDsc+1;
+		//print("closed a file");
+	endwhile;
+
+	[currPCB + 1]=0; 	//state is terminated
+
+	counter=0;
+				//INVALIDATE PERPROCESS FILETABLE	
+	while(counter<4) do
+		flag=	[PTBR + 2*counter];	
+		if([PTBR + 2*counter +1]=="01" || [PTBR + 2*counter +1]=="11") then
+				
+			[MEM_LIST + flag ]= [MEM_LIST+flag]-1;  //free the page
+
+		else
+			if (flag>=448) then 
+				[DISK_LIST + flag]=[DISK_LIST+flag]-1;
+			endif;
+		endif;						
+			[PTBR + 2*counter]=-1;
+			[PTBR + 2*counter +1]="00";
+
+		
+		counter=counter+1;
+	endwhile;
+
+	store(6,20);		//commit df
+
+	newPCB=currPCB+32;
+
+endif;
+
+if(sysCallNo==10 || sysCallNo==13) then 	//schedule
+
+
+	while(newPCB!=currPCB) do
+		if(newPCB==READY_LIST+ 1024) then
+			newPCB=READY_LIST;
+		endif;
+
+		if([newPCB+1]==1) then
+			break;
+		endif;
+		newPCB=newPCB+32;
+	endwhile;
+
+
+	
+	BP=[newPCB+2];
+	SP=[newPCB+3];
+	PTBR=[newPCB+5];
+	PTLR=[newPCB+6];
+	
+	R0 = [newPCB + 7];
+	R1 = [newPCB + 8];
+	R2 = [newPCB + 9];
+	R3 = [newPCB + 10];
+	R4 = [newPCB + 11];
+	R5 = [newPCB + 12];
+	R6 = [newPCB + 13];
+	R7 = [newPCB + 14];
+	
+	SP = SP + 1;
+	[[PTBR + 2*(SP/512)]*512 + SP%512]=[newPCB+4];  //set ip
+	[newPCB+1]=2;  //running
+
+//print("newProcess");
+//print([newPCB]);
+
+	ireturn;
+endif;
+	
+
+if(sysCallNo==14) then		//signal
+	counter=READY_LIST;
+	while(counter<READY_LIST+1024) do
+		if([counter+1]==100+(PTBR-1024)/8) then
+			[counter+1]=1;
+		endif;
+		counter=counter+32;
+	endwhile;
+
+	[phySP-2]=0;
+	ireturn;
+endif;
+	
+

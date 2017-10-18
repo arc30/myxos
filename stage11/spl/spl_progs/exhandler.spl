@@ -1,0 +1,167 @@
+alias Cause S0;
+alias VPagenum S1;
+alias Ip_addr S2;
+
+Cause = EFR % 10;
+VPagenum = (EFR / 10) % 100;
+Ip_addr = (EFR / 1000);
+
+//Printing the cause of error
+
+if (Cause != 0) then
+	if (Cause == 1) then
+	    print("Ill Ins");
+	endif;
+	if (Cause == 2) then
+	    print("Ill Mem Access");
+	endif;
+	if (Cause == 3) then
+    	    print("Arith Excep");
+	endif;
+	if (Cause == 4) then
+	    print("Ill Op");
+	endif;
+	  inline "JMP 11776";
+endif;
+
+breakpoint;
+
+alias counter S3;
+alias phyPage S4;
+alias flag S6;
+phyPage=[PTBR + 2*VPagenum];
+
+print("phyPg");print(phyPage);
+
+if (phyPage == -1) then
+	print("Invalid add");
+ 	inline "JMP 11776";
+endif;
+
+
+//search in mem for a free page
+counter=MEM_LIST+25;
+flag=0;
+alias freePage S5;
+alias index S7;
+alias freeBl S8;
+alias i S9;
+alias flagI S10;
+while(counter<MEM_LIST+64) do
+	if([counter]==0) then
+		freePage=counter-MEM_LIST;
+		[counter]=1;	//mark it as used
+		flag=1; break;
+	endif;
+	counter=counter+1;
+endwhile;
+
+if(flag==0) then 	//freepage not found
+			//second chance like page replacement algo
+	//search entire pagetable
+	counter=PTBR; //start with curr pagetable entry
+	
+	while(1) do
+		index=0;
+		if(counter>1279) then
+			counter=PAGE_TABLE; 	//circular checking
+		endif;
+		while(index<3) do 	//stack is never replaced
+			flag=0;
+			
+			if([counter + 2*index +1]=="01") then //notRef
+				if([MEM_LIST + [counter + 2*index ]]==1) then 	//notShared
+					freePage=[counter + 2*index ]; flag=1;
+					break;
+				endif;
+			endif;
+			
+			if([counter + 2*index +1]=="11") then //Ref
+				if([MEM_LIST + [counter + 2*index ]]==1) then 	//notShared
+					[counter + 2*index +1]="01"; 
+				endif;	
+			endif;
+			
+			
+		    index=index+1;
+		endwhile;
+		
+		if(flag==1) then 	//victimPage found to be swapped
+			
+
+			i=DISK_LIST + 448;
+			flagI=0;
+			while(i<DISK_LIST + 512) do 	//scan swap area
+				if([i]==0) then
+					freeBl=i-DISK_LIST; 
+					[i]=1;
+					flagI=1; break;
+				endif;
+				i=i+1;
+			endwhile;
+			
+			if(flagI==0) then 	//no freeBlock
+				inline "JMP 11776";
+			endif;
+			
+			//store victimpage in freeBl
+			
+			store(freePage,freeBl);
+			[counter+2*index]=freeBl;
+			[counter+2*index +1]="00";  //perprocessft of victimpage
+
+
+
+			break;
+		endif;
+		
+		counter=counter+8;
+
+	endwhile;
+endif;
+
+breakpoint;
+
+			
+			//to load the page
+			
+			if(phyPage >20 && phyPage<448) then
+				load(freePage,phyPage);
+			else					//swap area
+				load(freePage,phyPage);
+				[DISK_LIST + phyPage]=[DISK_LIST + phyPage]-1;	//decrement shared count
+				
+			endif;
+			
+			[PTBR + 2*VPagenum]=freePage;	//set pt
+			[PTBR + 2*VPagenum+1]="11";
+			
+			store(6,20);
+			
+			
+			//increment SP by 1 because a new value needs to be placed on top of the stack. Place Ip_addr 
+			
+			SP=SP+1;
+			
+			alias phySP S11;
+			phySP=[PTBR+2*(SP/512)]*512 + SP%512;		
+			[phySP]=Ip_addr;
+			
+			ireturn;
+
+			
+			
+
+
+
+
+
+
+
+	
+	
+	
+
+
+
+

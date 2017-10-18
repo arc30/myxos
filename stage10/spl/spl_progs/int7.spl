@@ -1,0 +1,108 @@
+alias phySP S0;
+alias sysCallNo S1;
+alias counter S2;
+alias flag S3;
+
+phySP=[PTBR + 2*(SP/512)]*512 + SP%512;
+
+sysCallNo=[phySP - 1];
+
+if(sysCallNo==10) then		//exit
+
+
+		
+	//check if there's any process in ready
+	alias newPCB S7;	
+	
+	counter=READY_LIST;
+	flag=0;
+	while(counter<READY_LIST + 1024) do
+		if([counter + 1]==1) then 	//state of a pcb is ready	
+			flag=1;	newPCB=counter;	break;
+		endif;
+	counter=counter+32;
+	endwhile;
+
+	if(flag==0) then      //halt the pgm then and there
+		print("exit");halt;
+	endif;
+
+	alias currPCB S4;
+	alias sysIndex S5;
+	alias fileDsc S6;
+
+	fileDsc=0;
+	currPCB=READY_LIST + 32*(PTBR-1024)/8;
+
+//print("inExit");
+//print([currPCB]);	
+	//Close all open instances of files by the process as done for Close system call.
+
+	while(fileDsc<8) do
+		sysIndex=[currPCB + 2*fileDsc + 15];
+		if(sysIndex!=-1) then
+			[FILE_TABLE + 2*sysIndex + 1] = [FILE_TABLE + 2*sysIndex + 1]-1;
+		
+			if ([FILE_TABLE + 2*sysIndex +1]==0) then
+				[FILE_TABLE + 2*sysIndex ]=-1;
+			endif;
+		
+		//invalidate entry in perprocess open table
+	
+		[currPCB + fileDsc*2 + 15]=-1;
+		[currPCB + fileDsc*2 + 15 + 1]=-1;
+		
+		endif;
+
+	fileDsc=fileDsc+1;
+		//print("closed a file");
+	endwhile;
+
+	[currPCB + 1]=0; 	//state is terminated
+
+	counter=0;
+				//INVALIDATE PERPROCESS FILETABLE	
+	while(counter<4) do
+		flag=	[PTBR + 2*counter];	
+		if([PTBR + 2*counter +1]=="01" || [PTBR + 2*counter +1]=="11") then
+				
+			[MEM_LIST + flag ]= [MEM_LIST+flag]-1;  //free the page
+
+		else
+			if (flag>=448) then 
+				[DISK_LIST + flag]=[DISK_LIST+flag]-1;
+			endif;
+		endif;						
+			[PTBR + 2*counter]=-1;
+			[PTBR + 2*counter +1]="00";
+
+		
+		counter=counter+1;
+	endwhile;
+
+	store(6,20);		//commit df
+
+	
+	BP=[newPCB+2];
+	SP=[newPCB+3];
+	PTBR=[newPCB+5];
+	PTLR=[newPCB+6];
+	
+	R0 = [newPCB + 7];
+	R1 = [newPCB + 8];
+	R2 = [newPCB + 9];
+	R3 = [newPCB + 10];
+	R4 = [newPCB + 11];
+	R5 = [newPCB + 12];
+	R6 = [newPCB + 13];
+	R7 = [newPCB + 14];
+	
+	SP = SP + 1;
+	[[PTBR + 2*(SP/512)]*512 + SP%512]=[newPCB+4];  //set ip
+	[newPCB+1]=2;  //running
+//print("newProcess");
+//print([newPCB]);
+	ireturn;
+endif;
+	
+

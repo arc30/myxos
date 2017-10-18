@@ -1,0 +1,178 @@
+//exec
+
+alias phySP S0;
+alias sysCallNo S1;
+alias counter S2;
+alias flag S3;
+
+phySP=[PTBR + 2*(SP/512)]*512 + SP%512;
+
+sysCallNo=[phySP - 1];
+
+if(sysCallNo==9) then
+	alias arg1 S4;
+	arg1=[phySP-3]; //filename
+
+	counter=FAT;
+	flag=0;
+	alias fatIndex S5;
+
+	while(counter < FAT+512) do
+		if([counter]==arg1) then 	//filename present
+			flag=1; fatIndex=(counter-FAT)/8; break;
+		endif;
+		counter=counter+8;
+	endwhile;
+
+	if(flag==0) then
+		[phySP-2]=-1;
+		print("invalidArgument");
+		ireturn;
+	endif;
+
+	alias basicBl S6;
+	basicBl=[FAT + 8*fatIndex + 2];
+	
+	//load basic blk to scratchpad
+
+	load(1,basicBl);
+	counter=SCRATCHPAD;
+
+	alias codeBlCountNewPgm S7;
+	alias codePageCountCurrProcess S8;	
+
+	codeBlCountNewPgm=0;
+	codePageCountCurrProcess=0;
+
+	while(counter< SCRATCHPAD+256) do			//count the num of codeBlocks in new program
+		if([counter]!=-1 && [counter]!="") then
+			codeBlCountNewPgm=codeBlCountNewPgm+1;
+		endif;
+		counter=counter+1;
+	endwhile;
+	
+	counter=0;
+	while(counter<3) do 	//excluding the 4th entry for stack
+		if([PTBR + 2*counter +1]=="01" || [PTBR + 2*counter +1]=="11") then 
+			codePageCountCurrProcess=codePageCountCurrProcess+1;
+		endif;
+		counter=counter+1;
+	endwhile;
+
+	if (codeBlCountNewPgm>3 || codePageCountCurrProcess>3) then
+		[phySP-2]=-1;
+		print("ERRCodeBlCnt");
+		ireturn;
+	endif;
+
+/////////////
+	
+
+	alias newPage S10;
+	alias index S11;
+	
+	flag=0;
+	index=0;
+	counter=0;
+
+	while(index < 3) do
+		counter=[PTBR + 2*index];
+		if([PTBR + 2*index+1]=="01" || [PTBR + 2*index+1]=="11" ) then //valid
+			[MEM_LIST + counter]=[MEM_LIST+counter]-1;
+		else
+			if(counter >=448) then 		//swap area
+				[DISK_LIST+counter]=[DISK_LIST+counter]-1;
+			endif;
+		endif;
+
+		[PTBR + 2*index]=-1;
+		[PTBR + 2*index+1]="00";  //invalidate
+		
+		index=index+1;
+	endwhile;	
+			
+	store(6,20);
+
+		
+	counter=0;
+	load(1,basicBl);
+	index=SCRATCHPAD;
+												
+				//copy the block nums of the file to the ptbr 
+	while(counter<3) do
+		
+
+			while(index< SCRATCHPAD+256) do			//find codeBlock in new program
+				if([index]!=-1 && [index]!="") then
+					newPage=[index]; index=index+1; break;
+				endif;
+				index=index+1;
+			endwhile;
+			[PTBR + 2*counter]=newPage;
+			[PTBR + 2*counter+1]="00";
+		
+		counter=counter+1;
+	endwhile;		
+
+	[PTBR + 2*3 +1]="01";  //aux info of stackEntry
+
+///////////////////////		
+
+	alias fileDsc S12;
+	alias sysIndex S13;
+	alias currPCB S14;
+		//close all files opened by this curr process	
+	
+	currPCB=READY_LIST + 32*(PTBR-1024)/8 ;
+
+	fileDsc=0;
+
+	while(fileDsc<8) do
+		sysIndex=[currPCB + 2*fileDsc + 15];
+		if(sysIndex!=-1) then
+			[FILE_TABLE + 2*sysIndex + 1] = [FILE_TABLE + 2*sysIndex + 1]-1;
+		
+			if ([FILE_TABLE + 2*sysIndex +1]==0) then
+				[FILE_TABLE + 2*sysIndex ]=-1;
+			endif;
+		
+		//invalidate entry in perprocess open table
+	
+		[currPCB + fileDsc*2 + 15]=-1;
+		[currPCB + fileDsc*2 + 15 + 1]=-1;
+		
+		endif;
+
+	fileDsc=fileDsc+1;
+	endwhile;
+
+	SP=3*512; //the logical address of starting address of stack when a new process is loaded to memory.
+
+	[[PTBR + 2*(SP/512)]*512 + SP%512]=0;  //set ip of new pgm as 0
+
+	ireturn;
+endif;
+
+
+
+
+
+
+
+
+
+
+
+		
+	
+	
+
+
+
+
+
+
+
+			
+
+

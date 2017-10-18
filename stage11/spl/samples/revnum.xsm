@@ -1,0 +1,19 @@
+alias dig S0;
+alias n S1;
+alias rev S3;
+alias i S4;
+
+print "Enter number to be reversed";
+read n;
+rev=0;
+i=1;
+while(n>0) do
+	dig=n%10;
+	rev=rev*10+dig;	
+
+	n=n/10;
+endwhile;
+print rev;
+
+
+

@@ -1,0 +1,136 @@
+
+//breakpoint;
+
+alias counter S0;
+
+load(7,1);//exHandler
+load(8,2);
+
+load(23,17);//int7
+load(24,18);
+
+load(11,5); //int1
+load(12,6);
+
+load(13,7); //int2
+load(14,8); 
+
+load(15,9); //int3
+load(16,10);
+
+load(17,11); //int4
+load(18,12);
+
+load(19,13); //int5
+load(20,14);
+
+load(21,15); //int 6
+load(22,16);
+
+load(23,17);
+load(24,18); //int 7
+
+load(9,3);  //timer interrupt
+load(10,4); 
+
+load(5,19); //FAT
+load(6,20); //DF
+
+//set state field of all pcb to 0 - terminated
+
+counter=READY_LIST;
+
+while(counter < READY_LIST + 1024) do
+	[counter+1]=0;
+	counter=counter+32;
+endwhile;
+
+
+[READY_LIST+0]=0;
+
+//in stage 10 no need to load any page
+
+//load(25,21); //page1 of init
+//load(26,22);
+//load(27,23);
+
+PTBR=1024;
+PTLR=4;
+[PTBR+0]=21;
+[PTBR+1]="00";
+[PTBR+2]=22;
+[PTBR+3]="00";
+[PTBR+4]=23;		//disk blocks
+[PTBR+5]="00";
+[PTBR+6]=25;		//stack in mem
+[PTBR+7]="01";
+
+[READY_LIST + 1] = 2; // Sets the entry for STATE as Running 
+
+//breakpoint;
+
+SP=3*512 ; //3*512
+[25 * 512] = 0; // Set up the IP value for INIT in the stack 
+
+//breakpoint;
+
+
+counter=0;
+
+while (counter<128) do              //set up syswide open filetable. 64 entries of 2 words each
+	[FILE_TABLE+counter+0]=-1;      //invalid entry : FAT index
+	[FILE_TABLE+counter+1]=0;	//no file is initially open : FILE open count
+	counter=counter+2;
+endwhile;
+
+//os startup code only loads init. set perprocess open file table.
+
+counter=15;
+
+while (counter <= 30) do //perprocess file table stored in pcb from 15 to 30. 8 entries of 2 words each
+	[READY_LIST + counter + 0]=-1;  //Pointer to sys-wide open file table entry
+	[READY_LIST + counter + 1]=-1;  //lseek position
+	counter=counter+2;
+endwhile;
+
+
+//initialise memory free list. pages 0-24 and 25-28 (init) are used. just 25(stack) for init in pureDemandPaging
+
+counter=MEM_LIST; //1280
+
+breakpoint;
+
+while(counter <= MEM_LIST + 25) do
+	[counter]=1;
+	counter=counter+1;
+endwhile;
+
+counter= MEM_LIST + 26;
+
+while(counter < MEM_LIST + 64) do
+	[counter]=0;
+	counter=counter+1;
+endwhile;
+
+
+//Clearing swap areas
+
+counter = 448;
+while (counter < 512) do
+  [DISK_LIST + counter] = 0;
+  counter = counter + 1;
+endwhile;
+
+//commit the df back to disk
+
+store(6, 20);
+
+
+
+breakpoint;
+
+ireturn; //IRET switches to user mode and sets ip as sp and sp--
+
+
+
+

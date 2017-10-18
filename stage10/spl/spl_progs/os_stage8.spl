@@ -1,0 +1,82 @@
+
+breakpoint;
+
+load(7,1);//exHandler
+load(8,2);
+
+load(23,17);//int7
+load(24,18);
+
+load(11,5); //int1
+load(12,6);
+
+load(13,7); //int2
+load(14,8); 
+
+load(15,9); //int3
+load(16,10);
+
+load(17,11); //int4
+load(18,12);
+
+load(9,3);  //timer interrupt
+load(10,4); 
+
+load(5,19); //FAT
+load(6,20); //DF
+
+[READY_LIST+0]=0;
+load(25,21); //page1 of init
+load(26,22);
+load(27,23);
+
+PTBR=1024;
+PTLR=4;
+[PTBR+0]=25;
+[PTBR+1]="01";
+[PTBR+2]=26;
+[PTBR+3]="01";
+[PTBR+4]=27;
+[PTBR+5]="01";
+[PTBR+6]=28;
+[PTBR+7]="01";
+
+[READY_LIST + 1] = 2; // Sets the entry for STATE as Running 
+
+//breakpoint;
+
+SP=3*512 ; //3*512
+[28 * 512] = 0; // Set up the IP value for INIT in the stack 
+
+//breakpoint;
+
+
+alias counter S0;
+counter=0;
+
+while (counter<128) do              //set up syswide open filetable. 64 entries of 2 words each
+	[FILE_TABLE+counter+0]=-1;      //invalid entry : FAT index
+	[FILE_TABLE+counter+1]=0;	//no file is initially open : FILE open count
+	counter=counter+2;
+endwhile;
+
+//os startup code only loads init. set perprocess open file table.
+
+counter=15;
+
+while (counter <= 30) do //perprocess file table stored in pcb from 15 to 30. 8 entries of 2 words each
+	[READY_LIST + counter + 0]=-1;  //Pointer to sys-wide open file table entry
+	[READY_LIST + counter + 1]=-1;  //lseek position
+	counter=counter+2;
+endwhile;
+
+
+
+
+
+
+ireturn; //IRET switches to user and sets ip as sp and sp--
+
+
+
+

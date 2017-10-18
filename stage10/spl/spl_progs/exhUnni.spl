@@ -1,0 +1,143 @@
+alias cause S1;
+alias vpg S2;
+alias ip_addr S3;
+
+cause=EFR%10;
+vpg=(EFR/10)%100;
+ip_addr=(EFR/1000);
+
+if(cause==0) then
+//print("in");
+	alias phypage S4;
+	//print("here");
+	
+	phypage=[PTBR+2*vpg];			// divide by 512?
+print("phypg");print(phypage);
+	if(phypage==-1) then
+		inline "JMP 11776";
+	endif;
+	
+	
+	alias counter S5;
+	counter=25;
+	while(counter<64) do
+		if([MEM_LIST+counter]==0) then
+			break;
+		endif;
+		counter=counter+1;
+	endwhile;
+	breakpoint;
+	alias mem_pg S6;
+	if(counter<64) then		
+		mem_pg=counter;
+		[MEM_LIST+mem_pg]=1;
+	endif;
+	
+	alias i S9;
+	alias victim S7;
+	if(counter>=64) then
+		//print("ex");
+		
+		alias ptbr S8;
+		//page=page+2;
+		ptbr=PTBR;
+		while(1) do
+			if(ptbr>1279) then
+				ptbr=1024;
+			endif;
+			if(ptbr%8==6) then
+				ptbr=ptbr+2;
+				continue;
+			endif;
+			if([MEM_LIST+[ptbr]]>1) then
+				ptbr=ptbr+2;
+				continue;
+			endif;
+			//if([ptbr+page+1]=="10")then
+			//	[ptbr+page+1]="00";
+			//endif;
+			if([ptbr+1]=="11")then
+				[ptbr+1]="01";
+				ptbr=ptbr+2;
+				continue;
+			endif;
+			if([ptbr+1]=="01")then
+				i=DISK_LIST+448;
+				while(i<DISK_LIST+512 && [i]!=0) do
+					i=i+1;
+				endwhile;
+				if(i>=DISK_LIST+512) then
+					inline "JMP 11776";
+				endif;
+				[i]=[i]+1;
+				victim=[ptbr];
+				store(victim,i-DISK_LIST);
+				[ptbr]=i-DISK_LIST;
+				[ptbr+1]="00";
+				mem_pg=victim;	
+				break;		
+			endif;
+			ptbr=ptbr+2;
+		endwhile;
+		
+	endif;
+
+	phypage=[PTBR+2*vpg];
+	
+	//print("here2");
+	if(phypage>=21 && phypage<448) then
+		load(mem_pg,phypage);
+	endif;
+	
+	if(phypage>=448 && phypage<512) then
+		load(mem_pg,phypage);
+		[DISK_LIST+phypage]=[DISK_LIST+phypage]-1;
+		
+	endif;
+	
+	store(6,20);
+	// check from here
+	
+	[PTBR+2*vpg]=mem_pg;
+	[PTBR+2*vpg+1]="11";
+	
+	SP=SP+1;
+	alias physp S11;
+	physp=([PTBR+2*((SP)/512)]*512)+((SP)%512);
+	
+	[physp]=ip_addr;
+	breakpoint;
+	ireturn;
+
+else
+	if(cause==1) then
+		print("Illegal Instruction");
+		inline "JMP 11776";
+	endif;
+	
+	if(cause==2) then
+		print("Illegal Memory access");
+		inline "JMP 11776";
+	endif;
+	
+	if(cause==3) then
+		print("Arithmetic Exception");
+		inline "JMP 11776";
+	endif;
+	
+	if(cause==4) then
+		print("Illegal operands");
+		inline "JMP 11776";
+	endif;
+endif;
+ireturn;
+
+	
+	
+	
+	
+		
+	
+		
+	
+	

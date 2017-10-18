@@ -1,0 +1,136 @@
+alias phySP S0;
+alias sysCallNo S1;
+
+alias flag S3;
+alias counter S4;
+alias fatIndex S5;
+alias sysIndex S6;
+alias currPCB S7;
+alias fileDsc S8;
+
+
+phySP = [PTBR + 2*(SP/512)]*512 + SP % 512; 
+
+sysCallNo= [phySP - 1];
+
+
+if(sysCallNo == 2) then		//open sys call
+	
+	alias fileName S2;
+	fileName = [phySP - 3];
+	counter=FAT;
+	flag=0;
+
+	while (counter<FAT + 512) do
+		if ([counter]==fileName) then  //a fat entry for file name present	
+			fatIndex = (counter-FAT)/8; flag=1; break;
+		endif;
+		counter=counter+8;
+	endwhile;
+
+	if(flag==0) then 	//file doesnt exist. cant open
+		[phySP - 2]=-1;
+		ireturn;
+	endif;
+
+	counter=0; flag=0;
+	while (counter<128) do		//search if the file is already opened in syswide OFT
+		if ([FILE_TABLE + counter] == fatIndex) then
+			sysIndex=counter/2; flag=1; break;
+		endif;
+		counter=counter+2;
+	endwhile;
+
+	if (flag==0) then 	//new entry need to b created in syswIde OFT
+		counter=0;
+		while (counter<128) do	
+			if([FILE_TABLE + counter]==-1) then	//free entry
+				sysIndex=counter/2;flag=1;break;
+		
+			endif;
+			counter=counter+2;
+		endwhile;
+	endif;
+
+	if(flag==0) then 	//no free entry in sysWide OFT
+		[phySP - 2]=-1;
+		ireturn;
+	endif;
+
+	currPCB=READY_LIST + 32*(PTBR-PAGE_TABLE);
+
+	counter=0; flag=0;
+
+	while(counter<=7) do	//search for free entry in perprocess OFT
+		if([currPCB + 15 + 2*counter] ==-1) then
+				
+						
+			fileDsc=counter;flag=1;break;		//bug fixd?? :P
+		endif;
+		counter=counter+1;
+	endwhile;
+
+	if(flag==0) then 	//perProces OFT full
+		[phySP-2]=-1;
+		 ireturn;
+	endif;
+
+	//store sysIndex and lseek in perprocess OFT
+		
+	[currPCB + 15 + 2*fileDsc]=sysIndex;
+	[currPCB + 15 + 2*fileDsc + 1]=0; 
+
+	//store fatIndex and openCount in sysWide OFT
+
+	[FILE_TABLE + 2*sysIndex]=fatIndex;
+	[FILE_TABLE + 2*sysIndex + 1]= [FILE_TABLE + 2*sysIndex + 1]+1;
+
+	[phySP-2]=fileDsc;
+	ireturn;
+endif;
+
+		
+
+if (sysCallNo == 3) then    	//close
+	
+	alias arg1 S2;
+	arg1=[phySP-3];            //file descriptor [0-7]
+
+	if (arg1<0 ||  arg1>7) then	 //invalid file descriptor
+		[phySP - 2]=-1;
+		ireturn;
+	endif;
+	
+	
+
+	
+	
+	currPCB = READY_LIST + 32*(PTBR-1024)/8;	
+
+	if ([currPCB + arg1*2 + 15 + 0]==-1) then  //invalid entry in perprocess open file table
+		[phySP - 2]=-1;
+		ireturn;
+	endif;
+
+	//index to systable. decrement count
+ 
+	
+	//alias sysIndex S10;
+	sysIndex= [currPCB + arg1*2 + 15];
+
+	[FILE_TABLE + 2*sysIndex + 1] = [FILE_TABLE + 2*sysIndex + 1]-1;
+	
+	
+
+	if ([FILE_TABLE + 2*sysIndex +1]==0) then
+		[FILE_TABLE + 2*sysIndex ]=-1;
+	endif;
+	
+	//invalidate entry in perprocess open table
+	
+	[currPCB + arg1*2 + 15]=-1;
+	[currPCB + arg1*2 + 15 + 1]=-1;
+
+	[phySP - 2]=0;
+	ireturn;
+endif;

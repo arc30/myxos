@@ -1,0 +1,161 @@
+//new int3 testing
+
+
+
+alias phySP S0;
+phySP=[PTBR + 2*(SP/512)]*512 + SP%512;
+
+alias fileDsc S1;
+
+alias sysCallNo S3;
+alias counter S11;
+alias flag S12;
+
+
+sysCallNo = [phySP -1];
+
+if (sysCallNo == 6) then //seek
+	alias newLseek S2;
+	
+	newLseek=[phySP - 3];
+	fileDsc=[phySP - 4];
+
+	if((fileDsc < 0) || (fileDsc>7)) then	//invalid file descriptor
+		[phySP-2]=-1;
+		ireturn;
+	endif;
+
+	alias currPCB S4;
+	currPCB=READY_LIST + 32*((PTBR-1024)/8); //ready_list + 32*currPID
+
+	if ([currPCB + 15 + 2*fileDsc]==-1) then	//pointer to System-wide Open File Table entry invalid
+		[phySP - 2]=-1;				//failure
+		print("not open:error");		
+		ireturn;				
+	endif;
+
+	alias sysIndex S5;
+	alias fatIndex S6;
+	alias fileSize S7;
+
+	sysIndex= [currPCB + 15 + 2*fileDsc];
+	
+	fatIndex=[FILE_TABLE + 2*sysIndex + 0];
+	fileSize=[FAT + fatIndex*8 + 1];
+
+	//check if newLseek is valid. ie in bw 0 and fileSize
+
+	if (newLseek<0 || newLseek>=fileSize) then 	//invalid lseekPos
+		[phySP-2]=-1;
+		ireturn;
+	endif;
+
+	//change lseek to newLseek
+
+	//[currPCB + 15 + 2*fileDsc + 1]=newLseek;
+
+	alias numOfDataBl S8;
+	
+	counter=0;
+
+	alias basicBl S9;
+	alias dataBl S10;
+	
+	basicBl=[FAT + fatIndex*8 + 2];
+	numOfDataBl=newLseek/512;
+	alias outerCounter S13;
+
+	outerCounter=0;	
+
+while(outerCounter <= numOfDataBl) do	
+	load(1,basicBl);
+			
+		print("basicBl");print(basicBl);
+
+	dataBl=[SCRATCHPAD + outerCounter];
+
+		print("dataBl");print(dataBl);
+
+	if (dataBl!=-1) then
+		load(1,dataBl);
+		counter=0;
+		while (newLseek>0 && counter<512) do
+			print([SCRATCHPAD+counter]);
+			counter=counter+1;
+			newLseek=newLseek-1;
+		endwhile;
+	endif;
+	outerCounter=outerCounter+1;
+endwhile;
+
+	[phySP-2]=0;
+	ireturn;
+endif;
+
+
+if (sysCallNo==7) then //read
+	alias readWord S2;
+	readWord=[phySP-3];
+	fileDsc=[phySP-4];
+
+	if((fileDsc < 0) || (fileDsc>7)) then	//invalid file descriptor
+		[phySP-2]=-1;
+		ireturn;
+	endif;
+
+	alias currPCB S4;
+	currPCB=READY_LIST + 32*((PTBR-1024)/8); //ready_list + 32*currPID
+
+	if ([currPCB + 15 + 2*fileDsc]==-1) then	//pointer to System-wide Open File Table entry invalid
+		[phySP - 2]=-1;				//failure
+		print("not open:error");		
+		ireturn;				
+	endif;
+
+	alias sysIndex S5;
+	alias lseekPos S6;
+	alias fatIndex S8;
+	alias fileSize S7;
+	alias basicBl S9;	
+
+	sysIndex= [currPCB + 15 + 2*fileDsc];
+	lseekPos=[currPCB + 15 + 2*fileDsc + 1];	
+	
+	fatIndex= [FILE_TABLE + 2*sysIndex + 0];
+	
+	fileSize=[FAT + fatIndex*8 + 1];
+	basicBl=[FAT + fatIndex*8 + 2];
+
+	if(lseekPos >= fileSize) then //invalid : lseek at the endoffile. nothing to read
+		[phySP-2]=-1;
+		ireturn;
+	endif;
+
+	alias dataIndex S10;
+		//load basic block to scratchpad and fetch the data block from which word is to be read
+	
+	load(1,basicBl);
+	dataIndex = lseekPos/512;
+	
+	alias dataBl S7;
+	dataBl = [SCRATCHPAD + dataIndex];
+
+	//load datablock to scratchpad
+
+	load(1,dataBl);
+	readWord = [SCRATCHPAD + (lseekPos%512)] ; //offset is (lseekPos % 512)
+
+	//store the readWord to the 2nd arg in stack : call by ref kinda?
+	
+	[phySP - 3] = readWord;
+
+	//increment lseek pos by 1
+
+	[currPCB + 15 + 2*fileDsc +1]=[currPCB + 15 + 2*fileDsc +1] + 1;
+
+	[phySP - 2]=0; 		//success !!!
+	ireturn;
+endif;
+
+
+		

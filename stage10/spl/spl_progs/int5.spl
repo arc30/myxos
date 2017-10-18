@@ -1,0 +1,267 @@
+//fork
+
+alias phySP S0;
+
+phySP =  [PTBR + 2*(SP/512)]*512 + SP%512;
+
+alias sysCallNo S1;
+sysCallNo = [phySP - 1];
+
+alias counter S11;
+alias flag S2;
+
+
+if(sysCallNo==8) then
+	alias childPID S3;
+	counter=READY_LIST;
+	flag=0;	
+
+	while(counter<READY_LIST + 1024) do	//scan for free pcb
+		if([counter+1]==0) then	//free pcb found is state 0				
+			childPID=(counter - READY_LIST)/32; flag=1; break;
+		endif;
+	counter=counter+32;
+	endwhile;
+
+	if(flag==0) then
+		[phySP-2]=-1;
+		ireturn;
+	endif;
+
+//breakpoint;
+
+	[counter]=childPID; 	//sets pid of child process
+	
+
+//step 4
+	
+	
+
+	//check if memfreelist has enough space for these pages
+
+	alias freeInd S5;
+	alias index S8;
+	
+	alias freePage S13;	//used again this register
+	alias i S14;
+	alias flagI S15;
+	alias freeBl S1;
+	
+	alias parentPTBR S6;
+	alias childPTBR S7;
+
+	parentPTBR=PTBR;
+	childPTBR=PAGE_TABLE +8*childPID;
+
+
+
+	counter=MEM_LIST;
+	
+
+	flag=0;
+	
+	while(counter<MEM_LIST+64) do			//check for atleast 1 free page in mf for stack
+		if([counter]==0) then //free page
+			flag=1; freeInd=counter-MEM_LIST;
+			 //mark this stackPage in mf
+			[MEM_LIST + freeInd]=1;
+
+			[childPTBR + 2*3+1]="01";
+			[childPTBR + 2*3 ]=freeInd; 		//entry for stack in child ptbr
+
+			break;
+		endif;
+	counter=counter+1;
+	endwhile;
+
+	if(flag==0) then //err
+		print("nofreeStack");		//shud b modified
+		[phySP-2]=-1;
+		ireturn;
+	
+		//implement pagereplacement
+	///////////////////////////
+	
+		counter=PTBR; //start with curr pagetable entry
+	
+	while(1) do
+		index=0;
+		if(counter>1279) then
+			counter=PAGE_TABLE; 	//circular checking
+		endif;
+		while(index<3) do 	//stack is never replaced
+			flag=0;
+			
+			if([counter + 2*index +1]=="01") then //notRef
+				if([MEM_LIST + [counter + 2*index ]]==1) then 	//notShared
+					freePage=[counter + 2*index ]; flag=1;
+					break;
+				endif;
+			endif;
+			
+			if([counter + 2*index +1]=="11") then //Ref
+				if([MEM_LIST + [counter + 2*index ]]==1) then 	//notShared
+					[counter + 2*index +1]="01"; 
+				endif;	
+			endif;
+			
+			
+		    index=index+1;
+		endwhile;
+		
+		if(flag==1) then 	//victimPage found to be swapped
+			
+
+			i=DISK_LIST + 448;
+			flagI=0;
+			while(i<DISK_LIST + 512) do 	//scan swap area
+				if([i]==0) then
+					freeBl=i-DISK_LIST; 
+					[i]=1;
+					flagI=1; break;
+				endif;
+				i=i+1;
+			endwhile;
+			
+			if(flagI==0) then 	//no freeBlock
+				inline "JMP 11776";
+			endif;
+			
+			//store victimpage in freeBl
+			
+			store(freePage,freeBl);
+			[counter+2*index]=freeBl;
+			[counter+2*index +1]="00";  //perprocessft of victimpage
+
+
+			[childPTBR + 2*3+1]="11";
+			[childPTBR + 2*3 ]=freePage; 		//entry for stack in child ptbr
+
+			store(6,20);
+			break;
+		endif;
+		
+		counter=counter+8;
+
+	endwhile;
+	
+	////////////////////////////
+	endif;
+
+
+
+	
+
+	
+	
+	alias newPage S9;
+	alias oldPage S10;
+
+	alias parentPID S12;
+	parentPID = (PTBR - 1024)/8;
+
+//breakpoint;
+
+	
+
+//copy stackContent from parent to child
+
+	newPage=[childPTBR  + 2*3];
+	oldPage=[parentPTBR + 2*3];
+	
+	counter=0;
+	while(counter<512) do
+		[newPage*512 + counter]=[oldPage*512 + counter];
+		counter=counter+1;
+	endwhile;
+
+		
+
+	
+
+
+	
+	index=0;
+
+//copy pt of parent to child except stackEntry
+//concept of shared pages
+
+	while(index<3) do
+		
+		[childPTBR + 2*index ]=[parentPTBR + 2*index];
+		[childPTBR + 2*index +1]=[parentPTBR + 2*index+1];	
+	
+            	if([parentPTBR + 2*index + 1]=="01" || [parentPTBR + 2*index + 1]=="11") then	//all valid entries	 		
+			counter=[parentPTBR + 2*index];
+			[MEM_LIST + counter]=[MEM_LIST+counter]+1;		//inc MemFreeList. Shared pages. COW?
+		
+		else					//invalid entry
+			counter=[parentPTBR + 2*index];
+			if (counter>=448) then 		//swap area
+				[DISK_LIST+counter]=[DISK_LIST+counter]+1;
+			endif;
+
+		endif;
+			 					
+		
+		index=index+1;
+			
+	endwhile;
+
+
+	//commit df back
+
+	store(6,20);
+
+//step5
+
+	[READY_LIST + 32*childPID + 5]=childPTBR ; //setting ptbr field in pcb of child process
+	[READY_LIST + 32*childPID + 4]=[phySP] ; //set ip value in pcb of child process as logical ip of parent process
+	[READY_LIST + 32*childPID + 3]=SP-1;    //sp of child process. manually remove the ip on top
+
+	[READY_LIST + 32*childPID + 1]=1;      //state as ready
+	[READY_LIST + (32 * childPID) + 2] = BP;
+  	[READY_LIST + (32 * childPID) + 6] = PTLR;
+  	[READY_LIST + (32 * childPID) + 7] = R0;
+	[READY_LIST + (32 * childPID) + 8] = R1;
+	[READY_LIST + (32 * childPID) + 9] = R2;
+	[READY_LIST + (32 * childPID) + 10] = R3;
+	[READY_LIST + (32 * childPID) + 11] = R4;
+	[READY_LIST + (32 * childPID) + 12] = R5;
+	[READY_LIST + (32 * childPID) + 13] = R6;	
+	[READY_LIST + (32 * childPID) + 14] = R7;
+	
+	//copy per process open file table to child process
+
+//breakpoint;
+
+	counter=15;
+	while(counter<31) do
+		[READY_LIST + 32* childPID + counter]=[READY_LIST + 32*parentPID + counter];    //sysIndex
+		[READY_LIST + 32* childPID + counter+1]=[READY_LIST + 32*parentPID + counter+1]; //lseekPos
+
+		flag=[READY_LIST + 32*parentPID + counter];    //sysindex
+
+	    if ( flag != -1) then	//valid entry then increment file count in syswide table 	
+		
+		[FILE_TABLE + 2*flag + 1] = [FILE_TABLE + 2*flag + 1]+1;
+
+	    endif;
+	    counter=counter+1;
+	endwhile;
+
+	[phySP-2]=childPID ; //returning child pid to parent
+
+	alias childPhySP S13;
+
+	childPhySP =  [childPTBR + 2*((SP-1)/512)]*512 + (SP-1)%512;
+	[childPhySP-1]=-2;
+
+	ireturn;
+endif;
+
+
+
+
+
+
